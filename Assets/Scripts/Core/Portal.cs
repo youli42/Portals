@@ -9,6 +9,11 @@ public class Portal : MonoBehaviour
     [Header("Main Settings")]
     public Portal linkedPortal; // 链接的另一个传送门
     public MeshRenderer screen; // 传送门的显示屏幕
+
+    [Tooltip("开启后允许传送门嵌套显示（消耗较大）。关闭后仅渲染一层，不再分配临时缓冲纹理。")]
+    public bool AllowNestingPortal = true; // 新增开关
+
+    [Tooltip("递归渲染限制。禁用双缓冲时强制为1。")]
     public int recursionLimit = 5; // 递归渲染限制，决定你能通过传送门看到多少层“门中门”
 
     [Header("Advanced Settings")]
@@ -459,6 +464,18 @@ public class Portal : MonoBehaviour
         if (linkedPortal != null)
         {
             linkedPortal.linkedPortal = this;
+        }
+
+        // 依据：需求明确指出禁用双缓冲后，嵌套次数强制锁定为1
+        if (!AllowNestingPortal)
+        {
+            recursionLimit = 1;
+        }
+        else
+        {
+            // 防御性修正：开启双缓冲时，嵌套次数下限至少应为2（1层本身不需要双缓冲），
+            // 但为了兼容性，至少保证其 >= 1，避免因误操作输入负数或0导致渲染循环崩溃。
+            if (recursionLimit < 1) recursionLimit = 1;
         }
     }
     #endregion 一些辅助工具
