@@ -1,4 +1,6 @@
-﻿using System.Collections;
+﻿using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -51,10 +53,8 @@ public class Portal : MonoBehaviour
 
     // 手动渲染此传送门挂载的摄像机
     // 调用顺序在 PrePortalRender 之后，PostPortalRender 之前
-    public void Render()
+    public void Render(ScriptableRenderContext context)
     {
-
-        // 如果玩家摄像机看不到链接的那个传送门屏幕，则跳过本次渲染以节省性能
         if (!CameraUtility.VisibleFromCamera(linkedPortal.screen, playerCam))
         {
             return;
@@ -67,20 +67,17 @@ public class Portal : MonoBehaviour
         var renderRotations = new Quaternion[recursionLimit];
 
         int startIndex = 0;
-        portalCam.projectionMatrix = playerCam.projectionMatrix; // 同步摄像机投影矩阵
+        portalCam.projectionMatrix = playerCam.projectionMatrix;
 
-        // 递归逻辑：计算每一层递归中摄像机应该处于的位置和旋转
         for (int i = 0; i < recursionLimit; i++)
         {
             if (i > 0)
             {
-                // 如果通过当前门看不到链接门的屏幕，则停止更深层次的递归计算
                 if (!CameraUtility.BoundsOverlap(screenMeshFilter, linkedPortal.screenMeshFilter, portalCam))
                 {
                     break;
                 }
             }
-            // 每进一层递归，都要应用一次相对空间变换
             localToWorldMatrix = transform.localToWorldMatrix * linkedPortal.transform.worldToLocalMatrix * localToWorldMatrix;
             int renderOrderIndex = recursionLimit - i - 1;
             renderPositions[renderOrderIndex] = localToWorldMatrix.GetColumn(3);
@@ -90,17 +87,20 @@ public class Portal : MonoBehaviour
             startIndex = renderOrderIndex;
         }
 
-        // 暂时隐藏传送门屏幕，这样摄像机才能“看穿”过去
         screen.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;
         linkedPortal.screen.material.SetInt("displayMask", 0);
 
-        // 按照从深到浅的顺序进行渲染（先画最远处的递归画面）
         for (int i = startIndex; i < recursionLimit; i++)
         {
             portalCam.transform.SetPositionAndRotation(renderPositions[i], renderRotations[i]);
-            SetNearClipPlane(); // 设置斜向裁剪面
-            HandleClipping();   // 处理物体被门切断的视觉效果
-            portalCam.Render();
+            SetNearClipPlane();
+            HandleClipping();
+
+            // ================= 核心修改 =================
+            // 修改前：portalCam.Render();
+            // 修改后：使用 URP 专用的单相机渲染接口
+            UniversalRenderPipeline.RenderSingleCamera(context, portalCam);
+            // ============================================
 
             if (i == startIndex)
             {
@@ -108,7 +108,6 @@ public class Portal : MonoBehaviour
             }
         }
 
-        // 渲染结束后恢复屏幕显示
         screen.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
     }
 
