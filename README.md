@@ -1,6 +1,8 @@
 # Portals
 
-对 [SebLague/Portals](https://github.com/SebLague/Portals/) 项目的升级，使其再 URP 中可以正常显示
+对 [SebLague/Portals](https://github.com/SebLague/Portals/) 项目的升级，使其再 URP 中可以正常显示和使用
+
+核心部分代码在 [PortalCore](Assets/PortalCore) 文件夹中，理论上可以直接迁移使用
 
 请一定去观看[原作者的视频](https://www.youtube.com/watch?v=cWpFZbjtSQg)，这是很棒的教程
 
