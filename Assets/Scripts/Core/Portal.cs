@@ -313,17 +313,27 @@ public class Portal : MonoBehaviour
         }
     }
 
+    // 创建贴合远程传送门的斜投影近平面：
     // 使用自定义投影矩阵，使传送门摄像机的近裁剪面与传送门表面重合
     // 注意：这会影响深度缓冲区的精度，可能导致屏幕空间 AO 等效果出现问题
     void SetNearClipPlane()
     {
         // 学习资源：http://www.terathon.com/lengyel/Lengyel-Oblique.pdf
+
+        // 确定传送门相对摄像机方向
+        // 传送门有正反面之分。
+        // 通过点乘计算虚拟相机在传送门平面的哪一侧，从而决定裁剪平面的法线方向，确保只剔除门后的物体。
         Transform clipPlane = transform;
         int dot = System.Math.Sign(Vector3.Dot(clipPlane.forward, transform.position - portalCam.transform.position));
 
-        Vector3 camSpacePos = portalCam.worldToCameraMatrix.MultiplyPoint(clipPlane.position);
-        Vector3 camSpaceNormal = portalCam.worldToCameraMatrix.MultiplyVector(clipPlane.forward) * dot;
-        float camSpaceDst = -Vector3.Dot(camSpacePos, camSpaceNormal) + nearClipOffset;
+        // 转换到观察空间：
+        // 图形学中的投影计算必须在相机观察空间（View Space）下进行。
+        // 这里将传送门的世界坐标和世界法线，乘以 worldToCameraMatrix，转换到虚拟相机的相对坐标系中。
+        Vector3 camSpacePos = portalCam.worldToCameraMatrix.MultiplyPoint(clipPlane.position); // 传送门坐标
+        Vector3 camSpaceNormal = portalCam.worldToCameraMatrix.MultiplyVector(clipPlane.forward) * dot; // 传送门朝向
+
+        // 构建平面方程与斜投影矩阵
+        float camSpaceDst = -Vector3.Dot(camSpacePos, camSpaceNormal) + nearClipOffset; // 摄像机空间距离
 
         // 如果距离传送门非常近，不要使用斜裁剪面，否则会产生严重的视觉伪影
         if (Mathf.Abs(camSpaceDst) > nearClipLimit)
