@@ -446,34 +446,25 @@ public class Portal : MonoBehaviour
     // 注意：这会影响深度缓冲区的精度，可能导致屏幕空间 AO 等效果出现问题
     void SetNearClipPlane()
     {
-        // 学习资源：http://www.terathon.com/lengyel/Lengyel-Oblique.pdf
+        // 1. 强制同步摄像机基础标量参数，防止 URP Culling 使用旧数据
+        portalCam.nearClipPlane = playerCam.nearClipPlane;
+        portalCam.farClipPlane = playerCam.farClipPlane;
+        portalCam.fieldOfView = playerCam.fieldOfView;
+        portalCam.aspect = playerCam.aspect;
 
-        // 如果裁切面出错，可以强制摄像机根据最新的 Transform 同步矩阵，防止使用上一帧的旧矩阵计算裁剪面
-        // portalCam.ResetWorldToCameraMatrix();
-
-        // 确定传送门相对摄像机方向
-        // 传送门有正反面之分。
-        // 通过点乘计算虚拟相机在传送门平面的哪一侧，从而决定裁剪平面的法线方向，确保只剔除门后的物体。
         Transform clipPlane = transform;
         int dot = System.Math.Sign(Vector3.Dot(clipPlane.forward, transform.position - portalCam.transform.position));
 
-        // 转换到观察空间：
-        // 图形学中的投影计算必须在相机观察空间（View Space）下进行。
-        // 这里将传送门的世界坐标和世界法线，乘以 worldToCameraMatrix，转换到虚拟相机的相对坐标系中。
-        Vector3 camSpacePos = portalCam.worldToCameraMatrix.MultiplyPoint(clipPlane.position); // 传送门坐标
-        Vector3 camSpaceNormal = portalCam.worldToCameraMatrix.MultiplyVector(clipPlane.forward) * dot; // 传送门朝向
+        Vector3 camSpacePos = portalCam.worldToCameraMatrix.MultiplyPoint(clipPlane.position);
+        Vector3 camSpaceNormal = portalCam.worldToCameraMatrix.MultiplyVector(clipPlane.forward) * dot;
 
-        // 构建平面方程与斜投影矩阵
-        float camSpaceDst = -Vector3.Dot(camSpacePos, camSpaceNormal) + nearClipOffset; // 摄像机空间距离
+        float camSpaceDst = -Vector3.Dot(camSpacePos, camSpaceNormal) + nearClipOffset;
 
-        // 如果距离传送门非常近，不要使用斜裁剪面，否则会产生严重的视觉伪影
+        // 2. 只有在安全距离外，才尝试计算斜裁剪面
         if (Mathf.Abs(camSpaceDst) > nearClipLimit)
         {
             Vector4 clipPlaneCameraSpace = new Vector4(camSpaceNormal.x, camSpaceNormal.y, camSpaceNormal.z, camSpaceDst);
-
-            // 基于新的裁剪平面更新投影矩阵
-            // 使用玩家摄像机的设置计算，以保证 FOV 等参数一致
-            portalCam.projectionMatrix = playerCam.CalculateObliqueMatrix(clipPlaneCameraSpace);
+            Matrix4x4 obliqueMatrix = playerCam.CalculateObliqueMatrix(clipPlaneCameraSpace);
         }
         else
         {
@@ -527,6 +518,25 @@ public class Portal : MonoBehaviour
             // 但为了兼容性，至少保证其 >= 1，避免因误操作输入负数或0导致渲染循环崩溃。
             if (recursionLimit < 1) recursionLimit = 1;
         }
+    }
+
+    // 辅助函数：校验投影矩阵合法性
+    bool IsValidProjectionMatrix(Matrix4x4 mat)
+    {
+        // 排查矩阵中是否存在 NaN 或 Infinity
+        for (int i = 0; i < 16; i++)
+        {
+            if (float.IsNaN(mat[i]) || float.IsInfinity(mat[i]))
+            {
+                return false;
+            }
+        }
+        // 投影矩阵的行列式不应为 0（允许微小的浮点误差）
+        if (Mathf.Abs(mat.determinant) < 1e-6f)
+        {
+            return false;
+        }
+        return true;
     }
     #endregion 一些辅助工具
 }
