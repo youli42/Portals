@@ -21,9 +21,8 @@ public class PortalRendererManager : MonoBehaviour
 
     void OnBeginCameraRendering(ScriptableRenderContext context, Camera camera)
     {
-        // **必须排除传送门摄像机，只在主摄像机渲染前执行**
-        // 否则 RenderSingleCamera 会再次触发此事件，导致无限递归
-        if (camera != Camera.main)
+        // 必须排除传送门摄像机，只在主摄像机渲染前执行
+        if (camera != Camera.main || portals == null)
         {
             return;
         }
@@ -31,19 +30,29 @@ public class PortalRendererManager : MonoBehaviour
         // 1. 准备阶段
         for (int i = 0; i < portals.Length; i++)
         {
-            portals[i].PrePortalRender();
+            // 校验 null 防物体中途被销毁，校验 enabled 防未配置好的门执行逻辑
+            if (portals[i] != null && portals[i].enabled)
+            {
+                portals[i].PrePortalRender();
+            }
         }
 
-        // 2. 渲染阶段（传入 context）
+        // 2. 渲染阶段
         for (int i = 0; i < portals.Length; i++)
         {
-            portals[i].Render(context);
+            if (portals[i] != null && portals[i].enabled)
+            {
+                portals[i].Render(context);
+            }
         }
 
         // 3. 收尾阶段
         for (int i = 0; i < portals.Length; i++)
         {
-            portals[i].PostPortalRender();
+            if (portals[i] != null && portals[i].enabled)
+            {
+                portals[i].PostPortalRender();
+            }
         }
     }
 }

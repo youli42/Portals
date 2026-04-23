@@ -34,23 +34,64 @@ public class Portal : MonoBehaviour
     void Awake()
     {
         playerCam = Camera.main;
+        if (playerCam == null)
+        {
+            Debug.LogError($"[传送门错误] {gameObject.name} 找不到主摄像机！请检查场景中是否有 Tag 为 'MainCamera' 的摄像机。组件已自动禁用。");
+            enabled = false;
+            return;
+        }
+
         portalCam = GetComponentInChildren<Camera>();
+        if (portalCam == null)
+        {
+            Debug.LogError($"[传送门错误] {gameObject.name} 缺少子摄像机组件！组件已自动禁用。");
+            enabled = false;
+            return;
+        }
+
+        // 主动销毁子相机上多余的音频监听器，解决 Audio Listener 警告
+        AudioListener listener = portalCam.GetComponent<AudioListener>();
+        if (listener != null)
+        {
+            Destroy(listener);
+        }
+
+        if (screen == null)
+        {
+            Debug.LogError($"[传送门错误] {gameObject.name} 的 Screen 未赋值！组件已自动禁用。");
+            enabled = false;
+            return;
+        }
+
         portalCam.enabled = false; // 禁用摄像机，将通过脚本手动调用 Render()
         trackedTravellers = new List<PortalTraveller>();
         screenMeshFilter = screen.GetComponent<MeshFilter>();
+
         // 设置初始遮罩，用于处理递归渲染时的显示层级
         screen.material.SetInt("displayMask", 1);
+    }
+
+    // 在 Start 阶段检查外部依赖（确保所有对象的 Awake 已执行完毕）
+    void Start()
+    {
+        if (linkedPortal == null || linkedPortal.screen == null)
+        {
+            Debug.LogError($"[传送门错误] {gameObject.name} 未关联目标 Portal，或目标 Portal 配置不完整！该传送门将被跳过渲染。");
+            enabled = false;
+        }
     }
 
     // 更新正在穿过门的物体（只调用HandleTravellers()）
     void LateUpdate()
     {
+        if (!enabled) return;
         HandleTravellers();
     }
 
     // 在本帧任何传送门摄像机开始渲染之前调用
     public void PrePortalRender()
     {
+        if (!enabled) return; // 拦截未正确初始化的组件
         foreach (var traveller in trackedTravellers)
         {
             UpdateSliceParams(traveller);
@@ -61,6 +102,8 @@ public class Portal : MonoBehaviour
     // 调用顺序在 PrePortalRender 之后，PostPortalRender 之前
     public void Render(ScriptableRenderContext context)
     {
+        if (!enabled) return; // 拦截未正确初始化的组件
+
         if (!CameraUtility.VisibleFromCamera(linkedPortal.screen, playerCam)) return;
 
         CreateViewTexture();
@@ -143,6 +186,7 @@ public class Portal : MonoBehaviour
     // 在所有传送门渲染完毕，但在玩家摄像机渲染之前调用
     public void PostPortalRender()
     {
+        if (!enabled) return; // 拦截未正确初始化的组件
         foreach (var traveller in trackedTravellers)
         {
             UpdateSliceParams(traveller);
