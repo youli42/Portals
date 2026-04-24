@@ -20,10 +20,12 @@
 2. Box Collider：【传送物体】或者其他碰撞体：勾选 **是触发体**，以正常传送物体。
 3. Rigidbody：取消重力
 
+> 代码使用碰撞进行传送前检测
+
 添加子对象：
 
 1. 摄像机对象：直接添加即可，会自动使用。
-2. 平面模型：用作屏幕，需要使用 [Portal](Assets/PortalCore/Shader/Portal.shader) 材质（作为示例，可以直接使用  [M_PortalScreen](Assets/PortalCore/Material/M_PortalScreen.mat) ）
+2. **立方体**模型：用作屏幕，需要使用 [Portal](Assets/PortalCore/Shader/Portal.shader) 材质（作为示例，可以直接使用  [M_PortalScreen](Assets/PortalCore/Material/M_PortalScreen.mat) ）
 
 # 原始 Readme
 Little test of portals in Unity.
