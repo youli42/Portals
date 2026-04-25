@@ -6,8 +6,13 @@
         _MiddleColor("Middle Color", Color) = (1,1,1,1)
         _BottomColor("Bottom Color", Color) = (1,1,1,1)
 
-        [Enum(UnityEngine.Rendering.CullMode)] _Cull("Cull Mode", Float) = 1
+        [Header(Sun Settings)]
+        [HDR]_SunColor("Sun Color", Color) = (1, 1, 0.8, 1) // 开启 HDR 以支持泛光(Bloom)
+        _SunSize("Sun Size", Range(0.0001, 0.05)) = 0.005     // 太阳大小阈值
+        _SunSoftness("Sun Softness", Range(0.0, 0.005)) = 0.002 // 边缘羽化程度
 
+        [Header(Cull Settings)]
+        [Enum(UnityEngine.Rendering.CullMode)] _Cull("Cull Mode", Float) = 1
     }
     SubShader
     {
@@ -30,6 +35,8 @@
             #pragma target 3.0
             
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            // 引入 URP 光照库以获取 GetMainLight()
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 
             struct Attributes
             {
@@ -40,6 +47,7 @@
             struct Varyings
             {
                 float4 positionHCS : SV_POSITION;
+                float3 positionWS  : TEXCOORD1; // 传递世界空间坐标
                 float2 uv : TEXCOORD0;
             };
 
@@ -47,22 +55,48 @@
             float4 _TopColor;
             float4 _MiddleColor;
             float4 _BottomColor;
+            float4 _SunColor;
+            float _SunSize;
+            float _SunSoftness;
             CBUFFER_END
 
             Varyings vert(Attributes IN)
             {
                 Varyings OUT;
                 OUT.positionHCS = TransformObjectToHClip(IN.positionOS.xyz);
+                // 计算世界空间坐标，用于后续计算视线方向
+                OUT.positionWS = TransformObjectToWorld(IN.positionOS.xyz);
                 OUT.uv = IN.uv;
                 return OUT;
             }
 
             float4 frag(Varyings IN) : SV_Target
             {
+                // --- 1. 原有天空渐变逻辑 ---
                 float t = saturate(1.0 - IN.uv.y);
-                
                 float4 col = lerp(_BottomColor, _MiddleColor, saturate(t * 2.0));
                 col = lerp(col, _TopColor, saturate((t - 0.5) * 2.0));
+
+                // --- 2. 太阳绘制逻辑 ---
+                // 计算精确的视线方向 (从摄像机指向顶点)
+                float3 viewDirWS = normalize(IN.positionWS - _WorldSpaceCameraPos);
+
+                // 获取主光源数据 (包含方向)
+                Light mainLight = GetMainLight();
+                float3 lightDir = mainLight.direction;
+
+                // 计算视线与光源的重合度 (NdotL)
+                float NdotL = dot(viewDirWS, lightDir);
+
+                // 太阳遮罩计算：
+                // 1.0 - _SunSize 设定为太阳的硬边缘
+                // smoothstep 依据 _SunSoftness 生成平滑的光晕过渡
+                float sunThreshold = 1.0 - _SunSize;
+                float sunMask = smoothstep(sunThreshold - _SunSoftness, sunThreshold, NdotL);
+
+                // --- 3. 图像合成 ---
+                // 依据 mask 将太阳颜色叠加在天空背景上
+                col.rgb = lerp(col.rgb, _SunColor.rgb, sunMask);
 
                 return col;
             }
